@@ -25,7 +25,7 @@ findBetas <- function (index, seq.alpha = seq(0.5,1,0.1), nCV = 500, pSuccess = 
     error = function(e){
       print(paste("Index",i,"produced no output.")); 
       rep(NA,nlambda)}
-    )
+  )
   
   #convert the MSE list into a matrix
   MSE.mat <- sapply(MSE,"[",1:nlambda)
@@ -78,6 +78,8 @@ findBetas <- function (index, seq.alpha = seq(0.5,1,0.1), nCV = 500, pSuccess = 
   
 }
 
+
+registerDoParallel(cores=34) #24 for big mac!
 startT <- Sys.time()
 
 stopIndex <- (ncol(oxy.full.Y)-1) # last column is total reads, don't use it
@@ -85,13 +87,13 @@ stopIndex <- (ncol(oxy.full.Y)-1) # last column is total reads, don't use it
 #pf <- c(rep(1,ncol(oxy.full.X)-1),0) #penalty factor vector that forces inclusion of oxalate.consumed
 pf <- rep(1,ncol(oxy.full.X)) #do not force oxalate.consumed
 out <- c()
-usePoisson <- !names(oxy.full.Y) %in% c("Oxalate.Consumed","Oxalate.Excreted","Oxalate.Degraded","Total.Reads") 
+usePoisson <- !names(oxy.full.Y) %in% c("Total.Reads") 
 for(i in 1:stopIndex){
   print(i)
   try(ifelse(usePoisson[i],
              out <- rbind(out, findBetas(i, offset = log(oxy.full.Y$Total.Reads), family = "poisson", grouped = FALSE, penalty = pf)),
              out <- rbind(out, findBetas(i, grouped = FALSE, penalty = pf))
-                                ))
+  ))
 } 
 
 endT <- Sys.time()
