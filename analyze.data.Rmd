@@ -1,0 +1,78 @@
+---
+output: pdf_document
+---
+```{r message=FALSE}
+library(EnvStats)
+library(ggplot2)
+library(stringr)
+```
+
+```{r}
+setwd("C:/Users/JT/Dropbox/gates/jt/hmo_091816_mm-if/")
+
+#### look at data and make heatmap. works with "PoissonV5.R code"
+out <- read.csv("out_MM-IF-091816.csv",row.names=1)
+out_ford <- read.csv("out_MM-IF-091816-ford.csv",row.names=1)
+load("X.MM.IF.rda")
+load("Y.MM.IF.rda")
+
+hist(out$dev.ratio,100,xlab="Pseudo-R^2", main="")
+hist(table(out$i[out$i != 1]), breaks = 15, main = "Out Degree Distribution", xlab ="Out Degree", right = F)
+hist(table(out$j[out$i != 1]), breaks = 15, main = "In Degree Distribution", xlab ="In Degree", right = F)
+
+colX <- c(0,(colMeans(oxy.full.X))) #colX is the average proportion per sample of reads for that OTU
+colX[2:23] <- 1 #animal effects need to have a 1
+out$effect <- out$x * colX[out$i]
+hist(out$effect[out$effect != 0 & out$i <= 23],50, xlim = c(-1,7000), xlab = "Effect Size", main = "Subject-Bacteria interactions") 
+hist(out$effect[out$effect != 0 & out$i >= 24],50, xlim = c(-0.5,1), xlab = "Effect Size", main = "Bacteria-Bacteria interactions")
+out$meansize <- colX[out$i]
+
+out.clean <- out[out$dev.ratio > 0.02,]
+out.clean <- out.clean[out.clean$i != 1, ] #remove intercept
+hist(unique(out.clean$dev.ratio),30)
+#removed some redundant code here. colX and meanreads were the same thing. just note that $effects = $x.scaled
+
+hist(table(out.clean$i[!out.clean$i %in% 1]), 20, main = "Out Degree Distribution", xlab ="Out Degree", right = F)
+hist(table(out.clean$j), 20, main = "In Degree Distribution", xlab ="In Degree", right = F)
+alphaBetter <- unique(out.clean[,c("alpha","dev.ratio")])
+plot(alphaBetter)
+lines(supsmu(alphaBetter$alpha,alphaBetter$dev.ratio),col="red")
+table(out.clean[out.clean$i %in% 2:23, "i"]) #main effects of individual
+
+#load matrix of taxa names
+load("oxy.taxa.rda")
+temp <- as.matrix(oxy.taxa)
+table(temp[2,])
+
+library(reshape2)
+wide <- dcast(out.clean, j ~ i, value.var = "effect")  #changed x.scaled to effect here
+names(wide) <- c("Y.OTU",names(oxy.full.X)[as.numeric(names(wide)[-1])-1])
+wide$Y.OTU <- names(oxy.full.Y)[wide$Y.OTU]
+
+#make heatmap
+out.hist <- out.clean
+out.hist$i.denovo <- as.factor(c("intercept", names(oxy.full.X))[out.hist$i])
+out.hist$j.denovo <- as.factor(names(oxy.full.Y)[out.hist$j])
+out.hist$j.taxa <- as.character(out.hist$j.denovo)
+out.hist$i.taxa <- as.character(out.hist$i.denovo)
+#fill in some names. will replace later with taxa look up
+#### taxa lookup snagged from "process.data.R code"
+out.hist$j.taxa <- sapply(oxy.taxa[1,],as.character)[out.hist$j.taxa]
+out.hist$i.taxa <- sapply(oxy.taxa[1,],as.character)[out.hist$i.taxa]
+out.hist$j.taxa[is.na(out.hist$j.taxa)] <- as.character(out.hist$j.denovo[is.na(out.hist$j.taxa)])
+out.hist$i.taxa[is.na(out.hist$i.taxa)] <- as.character(out.hist$i.denovo[is.na(out.hist$i.taxa)])
+out.hist$i.taxa <- as.character(str_trim(out.hist$i.taxa))
+out.hist$j.taxa <- as.character(str_trim(out.hist$j.taxa))
+#get rid of the high level groups (for now just Bacteria?)
+out.hist <- out.hist[!out.hist$i.taxa %in% c("Archaea","Bacteria"),]
+out.hist <- out.hist[!out.hist$j.taxa %in% c("Archaea","Bacteria","Total.Reads"),]
+
+#really need to do two heatmaps. One for subjects on bacteria and one for bacteria on bacteria. the "effects" are scaled differently because there are no reads for the subjects. 
+test <- aggregate(effect ~ j.taxa + i.taxa, data=out.hist[out.hist$i >= 24,], "mean" )
+test2 <- aggregate(effect ~ j.taxa + i.taxa, data=out.hist[out.hist$i <= 23,], "mean" )
+
+ggplot(data = test, aes(x=i.taxa,y=j.taxa,fill=effect)) + geom_tile(colour="white") + theme(axis.text.x=element_text(angle = 90, hjust = 1, vjust=0.5, size=10),axis.text.y=element_text(size=10)) + scale_fill_gradient2(na.value="grey", name="Interaction Strength",low="blue",mid="white",high="red") + xlab("Milk bacteria") + ylab("Infant fecal bacteria")
+
+ggplot(data = test2, aes(x=i.taxa,y=j.taxa,fill=effect)) + geom_tile(colour="white") + theme(axis.text.x=element_blank(),axis.text.x=element_text(angle = 90, hjust = 1, vjust=0.5, size=10),axis.text.y=element_text(size=10)) + scale_fill_gradient2(na.value="grey", name="Interaction Strength",low="blue",mid="white",high="red") + xlab("Subject") + ylab("Infant fecal bacteria")
+
+```
